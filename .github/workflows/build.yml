@@ -1,0 +1,70 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: test, package, release
+    runs-on: macos-14
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: swift --version
+
+      - name: Tests
+        run: swift test
+
+      # Assembles build/PingFlow.app: release binary + Info.plist + Assets, then ad-hoc signs it.
+      - name: Build the bundle
+        run: |
+          ./Support/build_app.sh --universal
+          lipo -archs build/PingFlow.app/Contents/MacOS/PingFlow
+          codesign --verify --verbose=2 build/PingFlow.app
+
+      - name: Package the zip
+        run: |
+          version=$(plutil -extract CFBundleShortVersionString raw Support/Info.plist)
+          mkdir -p dist
+          ditto -c -k --keepParent build/PingFlow.app "dist/PingFlow-$version.zip"
+          echo "version=$version" >> "$GITHUB_ENV"
+          echo "archive=PingFlow-$version.zip" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PingFlow-macOS
+          path: dist/${{ env.archive }}
+
+      - name: Publish a release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > notes.md <<MARKDOWN
+          Hold ⌥ anywhere in the game, move, release over a slice. ⌃⌥ opens the emote wheel, ⌃⌥P toggles PingFlow.
+
+          **Install** — unzip into /Applications, then right-click → *Open* the first time. The build is
+          ad-hoc signed and not notarised, so Gatekeeper blocks a double-click of a downloaded copy.
+          After that, grant Accessibility in Privacy & Security → Accessibility → PingFlow; the app
+          re-checks every 1.5 s, so the wheel works the moment you flip the switch.
+
+          **Assets** — League of Legends art and audio belong to Riot Games (see Assets/ATTRIBUTION.md in
+          the repo). Delete the Assets folder inside the bundle and the wheel falls back to drawn
+          placeholders.
+          MARKDOWN
+          gh release create "$GITHUB_REF_NAME" \
+            --title "PingFlow $GITHUB_REF_NAME" \
+            --notes-file notes.md \
+            "dist/$archive" --verify-tag ||
+            gh release upload "$GITHUB_REF_NAME" "dist/$archive" --clobber
