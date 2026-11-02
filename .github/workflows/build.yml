@@ -14,7 +14,8 @@ concurrency:
 jobs:
   app:
     name: test, package, release
-    runs-on: macos-14
+    # The manifest needs Swift 6; macos-14 ships 5.10 and refuses to load it.
+    runs-on: macos-15
     permissions:
       contents: write
     steps:
