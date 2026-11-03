@@ -69,7 +69,9 @@ struct StageMarks: View {
     }
 
     private func point(around centre: CGPoint, angle: Double, radius: CGFloat) -> CGPoint {
-        CGPoint(x: centre.x + cos(angle) * radius, y: centre.y + sin(angle) * radius)
+        let x = CGFloat(cos(angle)) * radius
+        let y = CGFloat(sin(angle)) * radius
+        return CGPoint(x: centre.x + x, y: centre.y + y)
     }
 }
 

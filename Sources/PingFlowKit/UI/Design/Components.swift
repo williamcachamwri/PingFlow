@@ -2,8 +2,8 @@ import SwiftUI
 
 /// Clean checkbox.
 struct RayCheck: View {
-    enum State { case on, off, indeterminate }
-    let state: State
+    enum CheckState { case on, off, indeterminate }
+    let state: CheckState
     var onChange: ((Bool) -> Void)? = nil
 
     @State private var hovering = false

@@ -138,7 +138,7 @@ struct PingDetailPane: View {
 
     // MARK: - Sound
 
-    private var soundState: RayCheck.State {
+    private var soundState: RayCheck.CheckState {
         if !store.settings.pingSoundsEnabled { return store.settings.disabledPingSounds.contains(pingID) ? .off : .indeterminate }
         return store.settings.isPingSoundEnabled(pingID) ? .on : .off
     }
