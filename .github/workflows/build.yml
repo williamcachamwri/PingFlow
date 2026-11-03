@@ -54,7 +54,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cat > notes.md <<MARKDOWN
-          Hold ⌥ anywhere in the game, move, release over a slice. ⌃⌥ opens the emote wheel, ⌃⌥P toggles PingFlow.
+          Hold ⌥ anywhere in the game, move, release over a slice. Hold ⌃ for the emote wheel, ⌃⌥P enables or disables PingFlow.
+
+          The Emote Wheel page takes a drop from Finder: a gif, an image or a clip becomes an emote,
+          with an optional sound of its own, and lands on the wheel like the game's own art.
 
           **Install** — unzip into /Applications, then right-click → *Open* the first time. The build is
           ad-hoc signed and not notarised, so Gatekeeper blocks a double-click of a downloaded copy.
