@@ -1,27 +1,49 @@
 # PingFlow
 
 <p align="center">
-  <img src="demo/wheel.png" width="360" alt="The ping wheel as the overlay draws it, Danger selected on the north slice">
+  <img src="demo/wheel.png" width="340" alt="The ping wheel as the overlay draws it, Danger selected on the north slice">
 </p>
 
-A native macOS ping wheel for League of Legends. Hold **⌥** anywhere on screen, a wheel opens
-under the cursor, move to a slice, release **⌥** — the original ping animation plays on the overlay
-and the original ping sound plays. Hold **⌃** for the second wheel: 44 real emotes, same gesture.
-Nothing else about the machine changes: no Electron, no WebView, no window that stays open. The app
-lives in the menu bar.
+<p align="center">
+  <a href="https://github.com/williamcachamwri/PingFlow/actions/workflows/build.yml"><img src="https://img.shields.io/github/actions/workflow/status/williamcachamwri/PingFlow/build.yml?branch=main&label=build" alt="Build status"></a>
+  <a href="https://github.com/williamcachamwri/PingFlow/releases/latest"><img src="https://img.shields.io/github/v/release/williamcachamwri/PingFlow?label=release" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/macOS-13%2B-0096d4" alt="macOS 13 or newer">
+  <img src="https://img.shields.io/badge/Swift-6-F05138" alt="Swift 6">
+  <img src="https://img.shields.io/badge/arch-arm64%20%C2%B7%20x86__64-6e767d" alt="Universal binary">
+</p>
 
-Swift 6 · SwiftUI + AppKit + Core Animation + AVFAudio · Apple Silicon · macOS 13+
+> A native macOS ping wheel for League of Legends. Hold **⌥** anywhere on screen, a wheel opens
+> under the cursor, move to a slice, release **⌥** — the original ping animation plays on the overlay
+> and the original ping sound plays. Hold **⌃** for the second wheel: 44 real emotes, same gesture.
+> Nothing else about the machine changes: no Electron, no WebView, no window that stays open. The app
+> lives in the menu bar.
+
+**[Download the latest release](https://github.com/williamcachamwri/PingFlow/releases/latest)** ·
+Swift 6 · SwiftUI + AppKit + Core Animation + AVFAudio · macOS 13+
+
+---
+
+## Contents
+
+| | |
+| --- | --- |
+| [Install](#install) | first run, the one permission, the stale grant |
+| [Build and test](#build-and-test) | three commands, 77 tests |
+| [The settings window](#the-settings-window) | eight pages, two wheels, no save button |
+| [Architecture](#architecture) | eight modules and why the tap is listen-only |
+| [Assets and licensing](#assets-and-licensing) | whose art this is |
+| [Checking the UI without opening it](#checking-the-ui-without-opening-it) | four headless render modes |
 
 ---
 
 ## Install
 
 ```sh
-./Support/build_app.sh          # → build/PingFlow.app (arm64, ad-hoc signed, hardened runtime)
+./Support/build_app.sh          # → build/PingFlow.app (ad-hoc signed, hardened runtime)
 ```
 
-1. Drag `build/PingFlow.app` to `/Applications` and open it once. No window appears; the icon is in
-   the menu bar.
+1. Drag `PingFlow.app` to `/Applications` and open it once. No window appears; the icon is in the
+   menu bar.
 2. **Privacy & Security → Accessibility → PingFlow**, switch it on. The app polls every 1.5 s, so the
    wheel works the moment the switch flips — no relaunch. The Permissions page has the buttons and
    the retry.
@@ -29,8 +51,10 @@ Swift 6 · SwiftUI + AppKit + Core Animation + AVFAudio · Apple Silicon · macO
    disables PingFlow entirely.
 4. Launch at login is a switch on the General page and uses `SMAppService`, so it survives a reboot.
 
-Because the build is ad-hoc signed rather than notarised, an updated bundle can leave a stale entry
-in the Accessibility list. Remove PingFlow from that list, re-add it with **+**, and it works again.
+> [!TIP]
+> The build is ad-hoc signed and not notarised, so Gatekeeper stops a downloaded copy on the first
+> double-click. Right-click → **Open** gets past it. An updated bundle can also leave a stale entry
+> in the Accessibility list: remove PingFlow, re-add it with **+**, and it works again.
 
 ## Build and test
 
@@ -38,11 +62,49 @@ in the Accessibility list. Remove PingFlow from that list, re-add it with **+**,
 swift build                      # debug
 swift build -c release           # production
 swift test                       # 77 tests: geometry, wheel editor, scenes, input, settings
+./Support/build_app.sh --universal   # the .app that CI releases (arm64 + x86_64)
 ```
 
 The tests cover the parts that are pure logic — radial hit-testing, sector ordering, the state
 machine, slot swapping, keyboard decoding, settings round-tripping and validation. They never touch
-the event tap or the screen.
+the event tap or the screen. Every push runs them on a macOS runner and packages the app; a `v*` tag
+attaches the result to a release. See [`.github/workflows/build.yml`](.github/workflows/build.yml).
+
+## The settings window
+
+Eight pages in three sidebar groups. One accent; cards separate by fill rather than by border, and
+hairlines only run inside a card. Changes apply as you make them, so there is no save button and no
+*Autosaved* toast. Every page renders in both themes.
+
+| Group | Page | What it decides |
+| --- | --- | --- |
+| Preferences | General | Enable, launch at login, the menu bar and Dock icons, reset |
+| Preferences | Interaction | The wheel key, the toggle shortcut, the drag threshold, the cancel hatches |
+| Wheel | Ping Wheel | Which ping sits on each of the eight slices |
+| Wheel | Emote Wheel | Which emote sits on each of the eight slices |
+| Wheel | Sounds | Master volume, mute, whether pings make a noise, the hover tick |
+| Wheel | Appearance | Wheel size, opacity, colour, and the mark's size, lifetime, intensity |
+| System | Permissions | The Accessibility grant and the retry |
+| System | About | Version, build and the asset inventory on disk |
+
+The two wheel pages share one shape: the live wheel on the left, its library on the right, and the
+settings for that wheel in a card underneath. Assignment is drag-only — the plate on each spoke is
+already the slice's index and compass, so there is no separate slice list to keep in step.
+
+| Ping Wheel | Emote Wheel |
+| --- | --- |
+| <img src="demo/settings-pingwheel-dark.png" width="440" alt="The Ping Wheel page in dark mode"> | <img src="demo/settings-emotewheel-light.png" width="440" alt="The Emote Wheel page in light mode"> |
+
+**Interaction** records keys natively: click, press a combination, the keycaps render, **Esc**
+cancels, and a combination macOS cannot deliver globally — or one already bound — is refused with a
+message rather than silently accepted.
+
+<img src="demo/settings-interaction-dark.png" width="620" alt="The Interaction page, with the modifier keycaps and the toggle shortcut recorder">
+
+**Appearance** drives the wheel itself: size, opacity and colour, then the mark's size, lifetime and
+intensity, each with the value written next to the handle.
+
+<img src="demo/settings-appearance-light.png" width="620" alt="The Appearance page in light mode, showing the sliders and the wheel colour swatches">
 
 ## Architecture
 
@@ -72,37 +134,6 @@ watches for the activation modifier arriving and leaving (`.flagsChanged`, with 
 as the fallback that secure fields do not block) and for its own toggle combination. It stops
 watching entirely the moment PingFlow is disabled.
 
-## The settings window
-
-Eight pages in three sidebar groups — **Preferences** (General, Interaction) · **Wheel** (Ping Wheel,
-Emote Wheel, Sounds, Appearance) · **System** (Permissions, About). One accent; cards separate by
-fill rather than by border, and hairlines only run inside a card. Changes apply as you make them, so
-there is no save button and no *Autosaved* toast. Every page renders in both themes.
-
-The two wheel pages share one shape: the live wheel on the left, its library on the right, and the
-settings for that wheel in a card underneath. Assignment is drag-only — the plate on each spoke is
-already the slice's index and compass, so there is no separate slice list to keep in step.
-
-| Ping Wheel | Emote Wheel |
-| --- | --- |
-| <img src="demo/settings-pingwheel-dark.png" width="440" alt="The Ping Wheel page in dark mode"> | <img src="demo/settings-emotewheel-light.png" width="440" alt="The Emote Wheel page in light mode"> |
-
-**Interaction** records keys natively: click, press a combination, the keycaps render, **Esc**
-cancels, and a combination macOS cannot deliver globally — or one already bound — is refused with a
-message rather than silently accepted.
-
-<img src="demo/settings-interaction-dark.png" width="620" alt="The Interaction page, with the modifier keycaps and the toggle shortcut recorder">
-
-**Appearance** drives the wheel itself: size, opacity and colour, then the mark's size, lifetime and
-intensity, each with the value written next to the handle.
-
-<img src="demo/settings-appearance-light.png" width="620" alt="The Appearance page in light mode, showing the sliders and the wheel colour swatches">
-
-**About** is the inventory the app checked at launch — how many pings, emotes, slots and sounds are
-actually on disk, and whose art they are.
-
-<img src="demo/settings-about-dark.png" width="620" alt="The About page with the asset inventory and the Riot attribution">
-
 ## Assets and licensing
 
 Textures and sounds are the game's own, extracted from local League data with the tooling in the
@@ -110,28 +141,11 @@ reference repository ([darrenprx/lolPing](https://github.com/darrenprx/lolPing))
 `Assets/textures` (29 files), `Assets/sounds` (22 files) and `Assets/emotes` (88 files — 44 icons
 with their 44 voice lines). `Assets/ATTRIBUTION.md` records provenance and ships inside the bundle.
 
-**League of Legends art and audio belong to Riot Games.** PingFlow is not affiliated with or endorsed
-by Riot Games. The app's own source is MIT; that says nothing about the assets. Do not redistribute
-this bundle — build it locally for personal use.
-
-## Limits
-
-These are macOS's limits, not the app's, and PingFlow does not pretend otherwise:
-
-- No overlay above another application's **exclusive** full screen. Games in full-screen *window*
-  mode are fine; true exclusive mode takes the display away from the window server.
-- No overlay above **protected content** (DRM video layers), and screen capture of those surfaces is
-  blocked regardless of what PingFlow draws.
-- **Secure input** fields — password dialogs, some terminals, some banking apps — hide keystrokes
-  from every event tap. While one is focused the wheel simply will not open.
-- An ad-hoc signature means the Accessibility grant is tied to this exact bundle on disk; rebuilding
-  to a different path can require re-granting.
-- The global toggle defaults to Control-Option-P rather than the plain Control-P the brief
-  suggested. The tap is listen-only, so Control-P would still reach the focused app — but every
-  Control-P in a terminal or readline tool (bash, zsh, python, ssh) would also enable or disable
-  PingFlow, which is the opposite of an invisible utility. The recorder will let you bind Control-P
-  anyway if you want that trade-off; validation only refuses combinations macOS cannot deliver
-  globally.
+> [!CAUTION]
+> **League of Legends art and audio belong to Riot Games.** PingFlow is not affiliated with, endorsed
+> by, or sponsored by Riot Games, and the app's MIT source licence says nothing about these files.
+> Take the release for your own machine; do not redistribute the bundle. Delete the `Assets` folder
+> inside it and the wheel falls back to drawn placeholders, with no game art on disk at all.
 
 ## Checking the UI without opening it
 
@@ -149,6 +163,14 @@ measurable rather than eyeballed.
 
 <img src="demo/ping-allin.png" width="420" alt="The All In ping rendered off-screen, with the spawn crosshair on its exact point">
 
-`demo/` holds the seven shots this file embeds; re-render each one with `--out demo/<name>.png`.
+`demo/` holds the six shots this file embeds; re-render each one with `--out demo/<name>.png`.
 `--live-wheel` is the fourth mode: it photographs the real overlay on screen instead of an
 off-screen copy of it.
+
+---
+
+<p align="center">
+  <sub>From-scratch Swift implementation. The geometry constants, animation timings and asset naming
+  follow the MIT-licensed <a href="https://github.com/darrenprx/lolPing">lolPing</a> as a technical
+  specification; no Electron or TypeScript source is translated or wrapped.</sub>
+</p>
