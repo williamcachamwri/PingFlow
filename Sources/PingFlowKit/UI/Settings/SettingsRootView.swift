@@ -446,7 +446,7 @@ private struct HeaderStats: View {
                            tone: permissions.isGranted ? .success : .danger)
             case .pane(.about):
                 ValuePlate("\(PingDefinition.all.count) pings")
-                ValuePlate("\(EmoteDefinition.all.count) emotes")
+                ValuePlate("\(engine.library.entries.count) emotes")
             case .ping(let id):
                 let definition = PingDefinition.definition(for: id)
                 ValuePlate(definition.category.displayName)

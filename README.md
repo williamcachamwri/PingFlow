@@ -14,7 +14,8 @@
 
 > A native macOS ping wheel for League of Legends. Hold **⌥** anywhere on screen, a wheel opens
 > under the cursor, move to a slice, release **⌥** — the original ping animation plays on the overlay
-> and the original ping sound plays. Hold **⌃** for the second wheel: 44 real emotes, same gesture.
+> and the original ping sound plays. Hold **⌃** for the second wheel: 44 real emotes, same gesture —
+> and drop a gif, an image or a clip to put your own on it.
 > Nothing else about the machine changes: no Electron, no WebView, no window that stays open. The app
 > lives in the menu bar.
 
@@ -28,11 +29,12 @@ Swift 6 · SwiftUI + AppKit + Core Animation + AVFAudio · macOS 13+
 | | |
 | --- | --- |
 | [Install](#install) | first run, the one permission, the stale grant |
-| [Build and test](#build-and-test) | three commands, 77 tests |
+| [Build and test](#build-and-test) | five commands, 93 tests |
 | [The settings window](#the-settings-window) | eight pages, two wheels, no save button |
-| [Architecture](#architecture) | eight modules and why the tap is listen-only |
+| [Your own emotes](#your-own-emotes) | drop a gif, an image or a clip |
+| [Architecture](#architecture) | nine modules and why the tap is listen-only |
 | [Assets and licensing](#assets-and-licensing) | whose art this is |
-| [Checking the UI without opening it](#checking-the-ui-without-opening-it) | four headless render modes |
+| [Checking the UI without opening it](#checking-the-ui-without-opening-it) | six modes, five that write a PNG |
 
 ---
 
@@ -61,7 +63,7 @@ Swift 6 · SwiftUI + AppKit + Core Animation + AVFAudio · macOS 13+
 ```sh
 swift build                      # debug
 swift build -c release           # production
-swift test                       # 77 tests: geometry, wheel editor, scenes, input, settings
+swift test                       # 93 tests: geometry, wheel editor, scenes, input, settings, imports
 ./Support/build_app.sh               # the arm64 .app that CI releases
 ./Support/build_app.sh --universal   # same bundle with an added x86_64 slice
 ```
@@ -83,7 +85,7 @@ hairlines only run inside a card. Changes apply as you make them, so there is no
 | Preferences | General | Enable, launch at login, the menu bar and Dock icons, reset |
 | Preferences | Interaction | The wheel key, the toggle shortcut, the drag threshold, the cancel hatches |
 | Wheel | Ping Wheel | Which ping sits on each of the eight slices |
-| Wheel | Emote Wheel | Which emote sits on each of the eight slices |
+| Wheel | Emote Wheel | Which emote sits on each of the eight slices — shipped or dropped from Finder |
 | Wheel | Sounds | Master volume, mute, whether pings make a noise, the hover tick |
 | Wheel | Appearance | Wheel size, opacity, colour, and the mark's size, lifetime, intensity |
 | System | Permissions | The Accessibility grant and the retry |
@@ -95,7 +97,7 @@ already the slice's index and compass, so there is no separate slice list to kee
 
 | Ping Wheel | Emote Wheel |
 | --- | --- |
-| <img src="demo/settings-pingwheel-dark.png" width="440" alt="The Ping Wheel page in dark mode"> | <img src="demo/settings-emotewheel-light.png" width="440" alt="The Emote Wheel page in light mode"> |
+| <img src="demo/settings-pingwheel-dark.png" width="440" alt="The Ping Wheel page in dark mode"> | <img src="demo/settings-emotewheel-light.png" width="440" alt="The Emote Wheel page in light mode, with four imported emotes in the library beside the wheel"> |
 
 **Interaction** records keys natively: click, press a combination, the keycaps render, **Esc**
 cancels, and a combination macOS cannot deliver globally — or one already bound — is refused with a
@@ -108,15 +110,46 @@ intensity, each with the value written next to the handle.
 
 <img src="demo/settings-appearance-light.png" width="620" alt="The Appearance page in light mode, showing the sliders and the wheel colour swatches">
 
+## Your own emotes
+
+The Emote Wheel page takes a drop from Finder. One file makes one emote, thirty files make thirty,
+and the wheel draws them exactly like the shipped ones — a slice can be your own gif next to
+`poro_snax`.
+
+Nothing is kept at the size it arrived. The wheel's icon scales with the wheel size — 48 pt at
+League's reference size, 72 pt at the largest the slider allows — and the shipped emotes it sits
+beside are 128 px textures, so an import is normalised to that neighbourhood:
+
+| What you drop | What PingFlow keeps |
+| --- | --- |
+| A still image | A png with alpha, its long side cut to 256 px |
+| A gif | Every frame redrawn on one canvas, sampled to 40 frames without shortening the loop |
+| A video | Its first 6 seconds re-encoded small, played muted, plus a poster frame |
+| A sound | The bytes exactly as they arrived — mp3, m4a, wav, ogg, aiff, caf or flac |
+
+> [!NOTE]
+> **Sounds are copied, never converted.** Re-encoding would need a helper binary that this Mac is not
+> guaranteed to have, so the bytes you drop are the bytes that play. Drop a clip on the sound row and
+> it is refused with a sentence instead of quietly becoming something else.
+
+An import gets its own folder under `~/Library/Application Support/PingFlow/Emotes/<uuid>/`, with one
+`library.json` beside them: the app bundle is never written to, so an update cannot delete anyone's
+emotes. Dropping the same file twice is a no-op — the library compares sha256, not names — the shelf
+caps at 240 imports, and deleting one frees every slice that pointed at it.
+
+Only the slice under the pointer animates. The other seven draw their poster, so a library of forty
+imports costs no decoders until you aim at one.
+
 ## Architecture
 
-Eight things that do not know about each other's internals, joined by `PingFlowEngine`:
+Nine things that do not know about each other's internals, joined by `PingFlowEngine`:
 
 | Concern | Files | Notes |
 | --- | --- | --- |
 | Ping model | `Core/PingDefinition.swift`, `Core/EmoteDefinition.swift` | 12 pings (id, wheel label, colour, texture, sound, animation kind) and 44 emotes in four categories, each with its own texture and voice line. |
 | Wheel geometry | `Core/WheelGeometry.swift` | Pure math. Eight slices, dead zone, angle → slice, no AppKit import. |
 | Settings | `Core/Settings.swift` | One `Codable` value in `UserDefaults`; every field falls back instead of throwing. |
+| Custom emotes | `Core/EmoteKey.swift`, `Core/CustomEmote.swift`, `Core/EmoteLibrary.swift`, `Core/EmoteImport.swift`, `Core/EmoteImportQueue.swift`, `UI/Design/EmoteArtView.swift` | A slot names either a shipped id or a `custom:<uuid>`. Dropping a file normalises it off the main thread; the manifest is the only place that knows where an import's files are. |
 | Assets | `Core/AssetCatalog.swift` | Resolves `Contents/Resources/Assets` in the bundle, or `Assets/` in the repo when running from `.build`. |
 | Input | `Input/EventTap.swift`, `InputCoordinator.swift`, `Keys.swift`, `PermissionManager.swift` | A `CGEventTap` on key/mouse events, plus `AXIsProcessTrusted()` polling. |
 | Overlay | `Overlay/OverlayController.swift`, `OverlayHost.swift`, `WheelOverlayView.swift`, `WheelScene.swift`, `PingWheelView.swift`, `PingFxContainerView.swift` | Non-activating `NSPanel`s, one per screen, click-through, `canJoinAllSpaces`. |
@@ -142,6 +175,8 @@ Textures and sounds are the game's own, extracted from local League data with th
 reference repository ([darrenprx/lolPing](https://github.com/darrenprx/lolPing)), and stored under
 `Assets/textures` (29 files), `Assets/sounds` (22 files) and `Assets/emotes` (88 files — 44 icons
 with their 44 voice lines). `Assets/ATTRIBUTION.md` records provenance and ships inside the bundle.
+Emotes you import are not part of that inventory: they are written to Application Support, never into
+the bundle, and stay yours.
 
 > [!CAUTION]
 > **League of Legends art and audio belong to Riot Games.** PingFlow is not affiliated with, endorsed
@@ -151,14 +186,20 @@ with their 44 voice lines). `Assets/ATTRIBUTION.md` records provenance and ships
 
 ## Checking the UI without opening it
 
-`--render-settings`, `--render-wheel` and `--render-ping` write PNGs from an off-screen window at
-(-4000, -4000) — nothing appears on your screen, and the same view code paths run:
+`--render-settings`, `--render-wheel`, `--render-ping` and `--render-emote-wheel` write PNGs from an
+off-screen window at (-4000, -4000) — nothing appears on your screen, and the same view code paths run:
 
 ```sh
 .build/debug/PingFlow --render-settings --pane appearance --appearance dark --out /tmp/a.png
 .build/debug/PingFlow --render-wheel --wheel-size 540 --out /tmp/wheel.png
 .build/debug/PingFlow --render-ping --ping allin --size 640x520 --out /tmp/ping.png
+.build/debug/PingFlow --seed-emotes --from /tmp/files --support /tmp/demo   # imports a real library
+.build/debug/PingFlow --render-emote-wheel --slice 3 --out /tmp/emote.png   # aims at one of them
 ```
+
+`--seed-emotes` runs the drop through the same queue the settings page uses, so an import can be
+exercised — and photographed — without a pointer. `--render-emote-wheel` then draws the overlay wheel
+with that library, `--slice` being the spoke to aim at.
 
 The ping render draws a crosshair at the exact spawn point, so the animation's position is
 measurable rather than eyeballed.
@@ -166,8 +207,8 @@ measurable rather than eyeballed.
 <img src="demo/ping-allin.png" width="420" alt="The All In ping rendered off-screen, with the spawn crosshair on its exact point">
 
 `demo/` holds the six shots this file embeds; re-render each one with `--out demo/<name>.png`.
-`--live-wheel` is the fourth mode: it photographs the real overlay on screen instead of an
-off-screen copy of it.
+`--live-wheel` is the fifth mode that writes a PNG, and the only one that is not headless: it
+photographs the real overlay on screen rather than an off-screen copy of it.
 
 ---
 

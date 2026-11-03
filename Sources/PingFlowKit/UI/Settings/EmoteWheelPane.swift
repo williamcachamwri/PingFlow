@@ -155,7 +155,7 @@ struct EmoteWheelPane: View {
     // MARK: - The library
 
     private var libraryCard: some View {
-        SectionCard("Emote library",
+        SectionCard("Emote library", highlightID: "emoteLibrary",
                     trailing: AnyView(ValuePlate("\(filtered.count) of \(library.entries.count)"))) {
             searchField
                 .padding(.horizontal, 12)

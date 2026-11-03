@@ -40,8 +40,9 @@ enum EmoteImportError: Error, Equatable, Sendable {
 /// Everything here blocks, so callers run it off the main thread: give it a folder that already
 /// belongs to the new emote and it writes the art plus a poster into it.
 enum EmoteImporter {
-    /// Art is never kept bigger than this on its long side. The wheel draws 48 pt icons and the
-    /// overlay at most 220 pt, so anything larger only costs decode time and memory.
+    /// Art is never kept bigger than this on its long side. The wheel icon is 48 pt at its
+    /// reference size and 72 pt at the largest the slider allows, and the shipped emotes are
+    /// 128 px textures, so anything larger only costs decode time and memory.
     static let maxMediaSide = 256
     static let maxGIFFrames = 40
     static let maxVideoSeconds = 6.0

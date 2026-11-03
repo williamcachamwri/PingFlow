@@ -6,6 +6,7 @@ import SwiftUI
 /// a generic about box.
 struct AboutPane: View {
     @EnvironmentObject private var store: SettingsStore
+    @EnvironmentObject private var library: EmoteLibrary
     @State private var reduceMotion = SettingsRootView.isReduceMotion
 
     private var versionText: String { "\(AppInfo.version) (\(AppInfo.build))" }
@@ -86,7 +87,10 @@ struct AboutPane: View {
     private var statsRail: some View {
         HStack(spacing: 0) {
             stat("\(PingDefinition.all.count)", "Pings")
-            stat("\(EmoteDefinition.all.count)", "Emotes")
+            // The wheel can draw the shipped art and whatever the person dropped, so the page
+            // counts both — and says which half arrived after the download.
+            stat("\(EmoteDefinition.all.count + library.imported.count)", "Emotes")
+            stat("\(library.imported.count)", "Imported")
             stat("\(sliceCount)", "Wheel slots")
             stat("\(soundCount)", "Sounds")
         }

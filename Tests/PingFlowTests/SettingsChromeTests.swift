@@ -95,6 +95,15 @@ final class SettingsChromeTests: XCTestCase {
         XCTAssertTrue(SettingsCatalog.results(query: "nothing at all like this", scope: .all).isEmpty)
     }
 
+    func testAnImportIsFindableByWhatWasDropped() {
+        // The library is the only place a person can make an emote, so the words they would type
+        // after dropping a file have to reach it.
+        for query in ["gif", "drop a video", "import sound"] {
+            XCTAssertTrue(SettingsCatalog.results(query: query, scope: .all).contains { $0.id == "emoteLibrary" },
+                          "\(query) should reach the emote library")
+        }
+    }
+
     func testCategoryScopeHidesSettingsThatAreNotPings() {
         let found = SettingsCatalog.results(query: "ping", scope: .category(.vision))
         XCTAssertTrue(found.allSatisfy { $0.ping != nil })
