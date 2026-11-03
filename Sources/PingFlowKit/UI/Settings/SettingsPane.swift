@@ -37,7 +37,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Hashable {
         case .sounds: return "Volume, the hover tick, and which pings make a noise."
         case .appearance: return "Sizes, timing and the wheel's own colour."
         case .permissions: return "Accessibility is the one permission the wheel cannot work without."
-        case .about: return "Version, assets, storage and the limits of what macOS allows."
+        case .about: return "Version, build and what the wheel found on disk."
         }
     }
 
@@ -288,8 +288,8 @@ enum SettingsCatalog {
 
             Hit(id: "permissions", title: "Accessibility permission", subtitle: "The one the wheel needs to read keys",
                 keywords: "permission access accessibility input monitoring grant", destination: .pane(.permissions), ping: nil),
-            Hit(id: "about", title: "About and assets", subtitle: "Version, storage, Riot's licence",
-                keywords: "version credit licence attribution storage log", destination: .pane(.about), ping: nil),
+            Hit(id: "about", title: "About and assets", subtitle: "Version, build and the asset inventory",
+                keywords: "version build inventory assets missing emotes pings sounds", destination: .pane(.about), ping: nil),
         ]
         for definition in PingDefinition.all {
             out.append(Hit(id: "ping-\(definition.id.rawValue)", title: definition.name,

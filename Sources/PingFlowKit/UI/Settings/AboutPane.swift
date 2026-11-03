@@ -1,9 +1,9 @@
 import AppKit
 import SwiftUI
 
-/// Version, the inventory the wheel depends on, attribution, and the reference project. One card
-/// per job, hairlines instead of tinted bands, and the same monospace plates the rest of the
-/// window uses — the page reads as one family rather than a generic about box.
+/// Version and the inventory the wheel depends on. One card, hairlines instead of tinted bands, and
+/// the same monospace plates the rest of the window uses — the page reads as one family rather than
+/// a generic about box.
 struct AboutPane: View {
     @EnvironmentObject private var store: SettingsStore
     @State private var reduceMotion = SettingsRootView.isReduceMotion
@@ -25,22 +25,6 @@ struct AboutPane: View {
                 statsRail
             }
             .staggered(0, enabled: !reduceMotion)
-
-            SectionCard("Attribution") {
-                licence
-                LineRow("Reference project",
-                        subtitle: "The MIT-licensed lolPing whose geometry, timings and asset pipeline this app follows.",
-                        icon: AnyView(IconChip(symbol: "arrow.up.right")),
-                        divider: true,
-                        action: {
-                            if let url = URL(string: "https://github.com/darrenprx/lolPing") { NSWorkspace.shared.open(url) }
-                        }) {
-                    Text("github.com")
-                        .font(Metrics.mono)
-                        .foregroundStyle(Palette.secondaryText)
-                }
-            }
-            .staggered(1, enabled: !reduceMotion)
         }
     }
 
@@ -122,28 +106,5 @@ struct AboutPane: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .combine)
-    }
-
-    // MARK: - Licence
-
-    private var licence: some View {
-        HStack(alignment: .top, spacing: 14) {
-            IconChip(symbol: "scalemass")
-                .padding(.top, 1)
-            VStack(alignment: .leading, spacing: 8) {
-                Text("League of Legends, its ping icons and its sound effects are the property of Riot Games, Inc. PingFlow is not affiliated with, endorsed by, or sponsored by Riot Games.")
-                    .font(Metrics.rowSubtitle)
-                    .foregroundStyle(Palette.primaryText.opacity(0.9))
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("The artwork and audio were extracted from a locally installed game client and are shipped for private, non-commercial use. They are not PingFlow's to license, and this build is not for redistribution.")
-                    .font(Metrics.rowSubtitle)
-                    .foregroundStyle(Palette.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, Metrics.rowPadding)
-        .padding(.vertical, 14)
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
