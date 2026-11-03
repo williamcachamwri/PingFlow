@@ -28,9 +28,10 @@ jobs:
         run: swift test
 
       # Assembles build/PingFlow.app: release binary + Info.plist + Assets, then ad-hoc signs it.
+      # arm64 only: the runner's Swift 6.0 SPM refuses a manifest with two --arch flags.
       - name: Build the bundle
         run: |
-          ./Support/build_app.sh --universal
+          ./Support/build_app.sh
           lipo -archs build/PingFlow.app/Contents/MacOS/PingFlow
           codesign --verify --verbose=2 build/PingFlow.app
 

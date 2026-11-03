@@ -9,7 +9,7 @@
   <a href="https://github.com/williamcachamwri/PingFlow/releases/latest"><img src="https://img.shields.io/github/v/release/williamcachamwri/PingFlow?label=release" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/macOS-13%2B-0096d4" alt="macOS 13 or newer">
   <img src="https://img.shields.io/badge/Swift-6-F05138" alt="Swift 6">
-  <img src="https://img.shields.io/badge/arch-arm64%20%C2%B7%20x86__64-6e767d" alt="Universal binary">
+  <img src="https://img.shields.io/badge/arch-Apple__Silicon-6e767d" alt="Apple Silicon">
 </p>
 
 > A native macOS ping wheel for League of Legends. Hold **⌥** anywhere on screen, a wheel opens
@@ -62,13 +62,15 @@ Swift 6 · SwiftUI + AppKit + Core Animation + AVFAudio · macOS 13+
 swift build                      # debug
 swift build -c release           # production
 swift test                       # 77 tests: geometry, wheel editor, scenes, input, settings
-./Support/build_app.sh --universal   # the .app that CI releases (arm64 + x86_64)
+./Support/build_app.sh               # the arm64 .app that CI releases
+./Support/build_app.sh --universal   # same bundle with an added x86_64 slice
 ```
 
 The tests cover the parts that are pure logic — radial hit-testing, sector ordering, the state
 machine, slot swapping, keyboard decoding, settings round-tripping and validation. They never touch
-the event tap or the screen. Every push runs them on a macOS runner and packages the app; a `v*` tag
-attaches the result to a release. See [`.github/workflows/build.yml`](.github/workflows/build.yml).
+the event tap or the screen. Every push runs them on a macOS runner and packages the Apple Silicon
+app; a `v*` tag attaches the result to a release. See
+[`.github/workflows/build.yml`](.github/workflows/build.yml).
 
 ## The settings window
 
