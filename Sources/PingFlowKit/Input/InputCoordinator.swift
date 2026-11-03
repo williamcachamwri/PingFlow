@@ -321,23 +321,25 @@ final class InputCoordinator {
 
     private func fireEmote(slice: Int, settings: AppSettings) {
         guard settings.emoteWheelSlots.indices.contains(slice) else { return }
-        let definition = EmoteDefinition.definition(for: settings.emoteWheelSlots[slice])
         emoteScene.flashConfirmed(slice)
-        sendEmote(definition: definition, at: emotePressPoint, settings: settings)
+        sendEmote(key: settings.emoteWheelSlots[slice], at: emotePressPoint, settings: settings)
     }
 
     private func fireEmoteHub(settings: AppSettings) {
-        let definition = EmoteDefinition.definition(for: settings.emoteClick)
         emoteScene.flashConfirmed(nil)
-        sendEmote(definition: definition, at: emotePressPoint, settings: settings)
+        sendEmote(key: settings.emoteClick, at: emotePressPoint, settings: settings)
     }
 
-    private func sendEmote(definition: EmoteDefinition, at point: CGPoint, settings: AppSettings) {
-        overlay.spawnEmote(definition, at: point)
-        if settings.emoteSoundsEnabled {
-            audio.playEmote(definition)
+    private func sendEmote(key: EmoteKey, at point: CGPoint, settings: AppSettings) {
+        guard let asset = EmoteLibrary.shared.asset(for: key) else {
+            Log.input.warning("Emote \(key.rawValue, privacy: .public) has no files on disk")
+            return
         }
-        Log.input.info("Emote \(definition.name, privacy: .public) sent")
+        overlay.spawnEmote(asset, at: point)
+        if settings.emoteSoundsEnabled {
+            audio.playEmote(asset)
+        }
+        Log.input.info("Emote \(asset.name, privacy: .public) sent")
     }
 
     // MARK: - Cancel
@@ -374,12 +376,9 @@ final class InputCoordinator {
     }
 
     /// Sends an emote from the settings window, at the pointer, without touching the wheel.
-    func previewEmote(definition: EmoteDefinition) {
-        let settings = store.settings
+    func previewEmote(key: EmoteKey) {
         let point = CoordinateSpace.cgPoint(fromAppKit: NSEvent.mouseLocation)
-        overlay.spawnEmote(definition, at: point)
-        audio.playEmote(definition)
-        _ = settings
+        sendEmote(key: key, at: point, settings: store.settings)
     }
 
     /// Called when Accessibility disappears under us: do not leave a half-open wheel on screen.

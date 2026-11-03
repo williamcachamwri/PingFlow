@@ -130,42 +130,61 @@ final class AssetCatalog {
 
     // MARK: - Emotes
 
+    /// Where a shipped emote's art lives, for the import path that has to copy it.
+    func emoteTextureURL(named name: String) -> URL? {
+        fileURL(subdirectory: "emotes", name: name, extensions: ["png", "webp", "jpg", "gif"])
+    }
+
+    func emoteSoundURL(named name: String) -> URL? {
+        fileURL(subdirectory: "emotes", name: name, extensions: ["ogg", "wav", "mp3", "m4a", "caf", "aiff", "flac"])
+    }
+
     func emoteImage(named name: String) -> NSImage? {
+        guard let url = emoteTextureURL(named: name) else {
+            markMissing(texture: "emote:\(name)")
+            return nil
+        }
+        return image(at: url, cacheKey: "emote:\(name)")
+    }
+
+    /// Any image by URL, cached under `cacheKey` — imports are addressed by file, not by name.
+    func image(at url: URL, cacheKey: String) -> NSImage? {
         lock.lock()
-        let key = "emote:\(name)"
-        if let cached = imageCache[key] { lock.unlock(); return cached }
+        if let cached = imageCache[cacheKey] { lock.unlock(); return cached }
         lock.unlock()
 
-        guard let url = fileURL(subdirectory: "emotes", name: name, extensions: ["png", "webp", "jpg"]) else {
-            markMissing(texture: key)
-            return nil
-        }
         guard let image = NSImage(contentsOf: url) else {
-            markMissing(texture: key)
+            markMissing(texture: cacheKey)
+            Log.assets.error("Could not decode \(url.lastPathComponent, privacy: .public)")
             return nil
         }
         lock.lock()
-        imageCache[key] = image
+        imageCache[cacheKey] = image
         lock.unlock()
         return image
     }
 
     func emoteBuffer(named name: String) -> AVAudioPCMBuffer? {
+        guard let url = emoteSoundURL(named: name) else {
+            markMissing(sound: "emote:\(name)")
+            return nil
+        }
+        return buffer(at: url, cacheKey: "emote:\(name)")
+    }
+
+    /// A sound by URL, decoded once. mp3, m4a, wav, ogg, aiff, caf and flac all decode natively,
+    /// so an imported sound is never re-encoded.
+    func buffer(at url: URL, cacheKey: String) -> AVAudioPCMBuffer? {
         lock.lock()
-        let key = "emote:\(name)"
-        if let cached = bufferCache[key] { lock.unlock(); return cached }
+        if let cached = bufferCache[cacheKey] { lock.unlock(); return cached }
         lock.unlock()
 
-        guard let url = fileURL(subdirectory: "emotes", name: name, extensions: ["ogg", "wav", "mp3", "caf"]) else {
-            markMissing(sound: key)
-            return nil
-        }
         guard let buffer = AssetCatalog.decodeBuffer(from: url) else {
-            markMissing(sound: key)
+            markMissing(sound: cacheKey)
             return nil
         }
         lock.lock()
-        bufferCache[key] = buffer
+        bufferCache[cacheKey] = buffer
         lock.unlock()
         return buffer
     }

@@ -12,13 +12,17 @@ public enum RenderHarness {
     /// Called from the process entry point, which is the main thread; the work is marked isolated
     /// so the compiler agrees.
     public static func handleIfRequested(arguments: [String]) -> Int32? {
-        guard let mode = arguments.first(where: { $0.hasPrefix("--render") || $0 == "--live-wheel" }) else { return nil }
+        let modes = ["--render-settings", "--render-wheel", "--render-ping", "--render-emote-wheel",
+                     "--seed-emotes", "--live-wheel"]
+        guard let mode = arguments.first(where: modes.contains) else { return nil }
         let options = Options(arguments: arguments)
         return MainActor.assumeIsolated {
             switch mode {
             case "--render-settings": return runSettings(options: options)
             case "--render-wheel": return runWheel(options: options)
             case "--render-ping": return runPing(options: options)
+            case "--render-emote-wheel": return runEmoteWheel(options: options)
+            case "--seed-emotes": return seedEmotes(options: options)
             case "--live-wheel": return runLiveWheel(options: options)
             default:
                 FileHandle.standardError.write(Data("Unknown render mode \(mode)\n".utf8))
@@ -36,6 +40,12 @@ public enum RenderHarness {
         let size: CGSize
         let wheelSize: CGFloat
         let ping: String
+        /// The slice to aim at in `--render-emote-wheel`, so an import can be caught animating.
+        let slice: Int
+        /// A directory of files to import, for `--seed-emotes`.
+        let from: URL?
+        /// Where a seeded library lives; the render reads it back through `PINGFLOW_SUPPORT_DIR`.
+        let support: URL
         /// How long the animation runs before the frame is taken. `--render-ping` defaults to 0.35 s;
         /// sweeping it is how a delayed layer that parks in the wrong state gets caught.
         let settle: TimeInterval
@@ -59,6 +69,11 @@ public enum RenderHarness {
             size = explicitSize ?? CGSize(width: 980, height: 660)
             wheelSize = CGFloat(Double(value(for: "--wheel-size") ?? "460") ?? 460)
             ping = value(for: "--ping") ?? "danger"
+            slice = Int(value(for: "--slice") ?? "0") ?? 0
+            from = value(for: "--from").map { URL(fileURLWithPath: $0, isDirectory: true) }
+            support = URL(fileURLWithPath: value(for: "--support")
+                ?? FileManager.default.temporaryDirectory.appendingPathComponent("PingFlowEmoteDemo", isDirectory: true).path,
+                          isDirectory: true)
             settle = TimeInterval(value(for: "--settle") ?? "0.35") ?? 0.35
         }
     }
@@ -94,6 +109,8 @@ public enum RenderHarness {
             .environmentObject(engine.permissions)
             .environmentObject(engine.audio)
             .environmentObject(engine.loginItems)
+            .environmentObject(engine.library)
+            .environmentObject(engine.emoteImports)
             .preferredColorScheme(store.settings.appearanceMode.colorScheme)
             .frame(width: options.size.width, height: options.size.height)
 
@@ -116,6 +133,58 @@ public enum RenderHarness {
         }
     }
 
+    // MARK: - Seeding an import library
+
+    /// Fills a library through the real import queue so a render has imports to draw — the only
+    /// way a dropped file gets exercised without a pointer. An audio file beside the art, with the
+    /// same stem, becomes that emote's sound.
+    @MainActor
+    private static func seedEmotes(options: Options) -> Int32 {
+        guard let from = options.from else {
+            FileHandle.standardError.write(Data("--seed-emotes needs --from <directory of files>\n".utf8))
+            return 64
+        }
+        let library = EmoteLibrary(directory: options.support.appendingPathComponent("Emotes", isDirectory: true))
+        let queue = EmoteImportQueue(library: library)
+        let sources = ((try? FileManager.default.contentsOfDirectory(at: from, includingPropertiesForKeys: nil)) ?? [])
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        let audio = sources.filter { EmoteImporter.classify($0) == .audio }
+        let art = sources.filter { EmoteImporter.classify($0) != .audio }
+        guard !art.isEmpty else {
+            FileHandle.standardError.write(Data("No art files to import in \(from.path)\n".utf8))
+            return 64
+        }
+
+        // Imports never block the main thread, so the harness has to wait for them the way a
+        // person does: by keeping the run loop turning until the queue reports itself idle.
+        queue.add(artURLs: art)
+        pump(until: { queue.pending.isEmpty })
+        for emote in library.imported {
+            let stem = URL(fileURLWithPath: emote.originName).deletingPathExtension().lastPathComponent
+            if emote.sound == nil, let mate = audio.first(where: { $0.deletingPathExtension().lastPathComponent == stem }) {
+                queue.replaceSound(of: emote.id, with: mate)
+            }
+        }
+        pump(until: { queue.pending.isEmpty })
+
+        for emote in library.imported {
+            print("\(emote.id)\t\(emote.media.kind.rawValue)\t\(emote.originName)\t"
+                + "\(emote.media.width)×\(emote.media.height)\t\(emote.media.frameCount) frames\t"
+                + "sound:\(emote.sound?.fileName ?? "none")")
+        }
+        if let issue = queue.notice?.text, library.imported.isEmpty { print("nothing imported: \(issue)") }
+        print("library holds \(library.imported.count) imports at \(library.directory.path)")
+        return library.imported.isEmpty ? 70 : 0
+    }
+
+    /// Turns the run loop until a condition holds, or four seconds have gone by.
+    private static func pump(until done: () -> Bool) {
+        let deadline = Date().addingTimeInterval(4)
+        while !done(), Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
+    }
+
     // MARK: - The wheel on its own
 
     @MainActor
@@ -131,6 +200,29 @@ public enum RenderHarness {
             .background(Color(hex: "#0B0B0C"))
         return capture(root: AnyView(view), size: CGSize(width: side, height: side),
                        appearance: .dark, to: options.output)
+    }
+
+    /// The emote wheel as the overlay draws it, with whatever the library holds — the only way to
+    /// see an import fire without a keyboard.
+    @MainActor
+    private static func runEmoteWheel(options: Options) -> Int32 {
+        let application = NSApplication.shared
+        application.setActivationPolicy(.accessory)
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("PingFlowRender", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let store = SettingsStore(in: directory)
+        let slots = store.settings.emoteWheelSlots
+        let side = max(320, min(900, options.wheelSize)) + 80
+        let hovered = slots.indices.contains(options.slice) ? options.slice : nil
+        let centre = hovered.flatMap { EmoteLibrary.shared.asset(for: slots[$0])?.name } ?? "EMOTE"
+        let view = EmoteWheelView(slots: slots,
+                                  hoveredSlice: hovered,
+                                  size: side - 80,
+                                  centreText: centre)
+            .frame(width: side, height: side)
+            .background(Color(hex: "#0B0B0C"))
+        return capture(root: AnyView(view), size: CGSize(width: side, height: side),
+                       appearance: .dark, to: options.output, settle: options.settle)
     }
 
     /// Presents the real wheel in the real overlay window at the current pointer, photographs that

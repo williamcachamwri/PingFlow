@@ -4,7 +4,7 @@ import SwiftUI
 /// The emote wheel: same ring geometry as the ping wheel, but icons keep their original colours
 /// and are clipped to circles instead of wearing the gold tint.
 struct EmoteWheelView: View {
-    let slots: [EmoteDefinition.ID]
+    let slots: [EmoteKey]
     var hoveredSlice: Int?
     var confirmedSlice: Int?
     var size: CGFloat
@@ -122,15 +122,14 @@ struct EmoteWheelView: View {
     }
 
     /// Emote icons: circular-clipped, full colour, no tint. The key visual difference from the
-    /// ping wheel.
+    /// ping wheel. Imported art animates only on the slice you are aiming at.
     private func sliceIcons(layout: WheelLayout) -> some View {
         ZStack {
-            ForEach(Array(slots.enumerated()), id: \.offset) { index, emoteID in
-                let definition = EmoteDefinition.definition(for: emoteID)
+            ForEach(Array(slots.enumerated()), id: \.offset) { index, emoteKey in
                 let isHot = hoveredSlice == index
                 let offset = layout.iconCentre(forSlice: index)
                 let centre = CGPoint(x: size / 2 + offset.x, y: size / 2 + offset.y)
-                emoteIcon(definition: definition)
+                emoteIcon(key: emoteKey, animates: isHot)
                     .frame(width: layout.iconSize, height: layout.iconSize)
                     .clipShape(Circle())
                     .scaleEffect(isHot ? 1.18 : 1)
@@ -143,17 +142,15 @@ struct EmoteWheelView: View {
     }
 
     @ViewBuilder
-    private func emoteIcon(definition: EmoteDefinition) -> some View {
-        if let image = AssetCatalog.shared.emoteImage(named: definition.textureName) {
-            Image(nsImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
+    private func emoteIcon(key: EmoteKey, animates: Bool) -> some View {
+        if let asset = EmoteLibrary.shared.asset(for: key) {
+            EmoteArtView(asset: asset, animates: animates, corner: 0)
                 .accessibilityHidden(true)
         } else {
             Circle()
                 .fill(Color(hex: "#4a4e54"))
                 .overlay(
-                    Text(String(definition.name.prefix(2)).uppercased())
+                    Text(String(EmoteLibrary.shared.name(for: key).prefix(2)).uppercased())
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(.white)
                 )

@@ -55,8 +55,8 @@ final class OverlayHost: ObservableObject {
         stage.spawn(definition: definition, at: swiftUIPoint(from: globalPoint), settings: store.settings)
     }
 
-    func spawnEmote(_ definition: EmoteDefinition, at globalPoint: CGPoint) {
-        emoteStage.spawn(definition: definition, at: swiftUIPoint(from: globalPoint), settings: store.settings)
+    func spawnEmote(_ asset: EmoteAsset, at globalPoint: CGPoint) {
+        emoteStage.spawn(asset: asset, at: swiftUIPoint(from: globalPoint), settings: store.settings)
     }
 
     /// CoreGraphics global → AppKit global → this panel's SwiftUI coordinates.

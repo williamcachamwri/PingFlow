@@ -138,14 +138,15 @@ final class OverlayController: ObservableObject {
 
     // MARK: - Emotes
 
-    func spawnEmote(_ definition: EmoteDefinition, at globalPoint: CGPoint) {
+    func spawnEmote(_ asset: EmoteAsset, at globalPoint: CGPoint) {
         guard let screen = screen(containing: globalPoint) else { return }
         let identifier = key(for: screen)
         let target = panel(for: screen)
         cancelSweep(for: identifier)
-        target.host.spawnEmote(definition, at: globalPoint)
+        target.host.spawnEmote(asset, at: globalPoint)
         target.panel.orderFrontRegardless()
-        let lifetime = EmoteStage.displayDuration + 0.4
+        // A clip that runs longer than the stock three seconds keeps its panel alive.
+        let lifetime = max(EmoteStage.displayDuration, target.host.emoteStage.longestRemainingLifetime) + 0.4
         sweepIdlePanels(for: identifier, after: lifetime)
     }
 

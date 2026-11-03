@@ -7,7 +7,7 @@ import Combine
 final class EmoteScene: ObservableObject {
     @Published private(set) var phase: WheelPhase = .hidden
     @Published private(set) var hoveredSlice: Int?
-    @Published private(set) var slots: [EmoteDefinition.ID] = EmoteDefinition.defaultWheel
+    @Published private(set) var slots: [EmoteKey] = EmoteDefinition.defaultWheel
     @Published private(set) var centreText: String = "EMOTE"
     @Published private(set) var size: CGFloat = 460
     @Published private(set) var overlayOpacity = 1.0
@@ -18,9 +18,14 @@ final class EmoteScene: ObservableObject {
 
     var isOpen: Bool { phase == .opening || phase == .active }
 
-    var hoveredDefinition: EmoteDefinition? {
+    var hoveredKey: EmoteKey? {
         guard let hoveredSlice, slots.indices.contains(hoveredSlice) else { return nil }
-        return EmoteDefinition.definition(for: slots[hoveredSlice])
+        return slots[hoveredSlice]
+    }
+
+    var hoveredAsset: EmoteAsset? {
+        guard let key = hoveredKey else { return nil }
+        return EmoteLibrary.shared.asset(for: key)
     }
 
     func sync(settings: AppSettings) {
@@ -46,7 +51,7 @@ final class EmoteScene: ObservableObject {
         guard index != hoveredSlice else { return false }
         hoveredSlice = index
         if let index, slots.indices.contains(index) {
-            centreText = EmoteDefinition.definition(for: slots[index]).name
+            centreText = EmoteLibrary.shared.name(for: slots[index])
         } else {
             centreText = "EMOTE"
         }
@@ -80,27 +85,44 @@ final class EmoteScene: ObservableObject {
 final class EmoteStage: ObservableObject {
     struct Item: Identifiable {
         let id = UUID()
-        let definition: EmoteDefinition
+        let asset: EmoteAsset
         let position: CGPoint
         let size: CGFloat
+        /// How long this one stays: a clip gets to finish, a still does not linger.
+        let lifetime: Double
         let startedAt = Date()
     }
 
     static let maximumSimultaneous = 30
     static let displayDuration: Double = 3.0
+    /// Moving art is held down to this, so a thirty-second clip cannot park itself on the desktop.
+    static let maximumClipDuration: Double = 6.0
 
     @Published private(set) var items: [Item] = []
 
     var isEmpty: Bool { items.isEmpty }
 
+    /// The longest any live item still has on screen: when the panel can be swept away.
+    var longestRemainingLifetime: Double {
+        guard !items.isEmpty else { return 0 }
+        let now = Date()
+        return items.map { max(0, $0.lifetime - now.timeIntervalSince($0.startedAt)) }.max() ?? 0
+    }
+
+    static func lifetime(for asset: EmoteAsset) -> Double {
+        guard asset.isAnimated else { return displayDuration }
+        return max(displayDuration, maximumClipDuration)
+    }
+
     @discardableResult
-    func spawn(definition: EmoteDefinition, at position: CGPoint, settings: AppSettings) -> Item {
-        let item = Item(definition: definition,
+    func spawn(asset: EmoteAsset, at position: CGPoint, settings: AppSettings) -> Item {
+        let item = Item(asset: asset,
                         position: position,
-                        size: CGFloat(settings.pingSize))
+                        size: CGFloat(settings.pingSize),
+                        lifetime: Self.lifetime(for: asset))
         items.append(item)
         while items.count > Self.maximumSimultaneous { items.removeFirst() }
-        scheduleRemoval(of: item.id, after: Self.displayDuration + 0.2)
+        scheduleRemoval(of: item.id, after: item.lifetime + 0.2)
         return item
     }
 

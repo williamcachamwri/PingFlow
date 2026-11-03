@@ -15,6 +15,9 @@ final class PingFlowEngine: ObservableObject {
     let loginItems: LoginItemController
     let coordinator: InputCoordinator
     let tap: EventTap
+    /// The built-in emotes plus the user's imports, and the queue that turns dropped files into them.
+    let library: EmoteLibrary
+    let emoteImports: EmoteImportQueue
 
     @Published private(set) var tapStatus: EventTap.Status = .stopped
     @Published private(set) var isWheelActive = false
@@ -43,6 +46,8 @@ final class PingFlowEngine: ObservableObject {
         self.loginItems = loginItems
         self.coordinator = coordinator
         self.tap = tap
+        self.library = .shared
+        self.emoteImports = EmoteImportQueue(library: .shared)
 
         wire()
     }

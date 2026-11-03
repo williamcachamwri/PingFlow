@@ -70,7 +70,7 @@ enum WheelEditor {
     }
 }
 
-/// Same rules as WheelEditor, but for the emote wheel.
+/// Same rules as WheelEditor, over slots that may hold a shipped emote or an import.
 enum EmoteWheelEditor {
     enum Slot: Hashable, Sendable {
         case slice(Int)
@@ -82,7 +82,7 @@ enum EmoteWheelEditor {
         return nil
     }
 
-    static func assign(_ wheel: [EmoteDefinition.ID], emote: EmoteDefinition.ID, to slot: Slot) -> [EmoteDefinition.ID]? {
+    static func assign(_ wheel: [EmoteKey], emote: EmoteKey, to slot: Slot) -> [EmoteKey]? {
         guard let index = slotSliceIndex(of: slot), index >= 0, index < wheel.count else { return nil }
         if wheel[index] == emote { return nil }
         guard let from = wheel.firstIndex(of: emote) else { return nil }
@@ -92,7 +92,7 @@ enum EmoteWheelEditor {
         return next
     }
 
-    static func place(_ wheel: [EmoteDefinition.ID], emote: EmoteDefinition.ID, at index: Int) -> [EmoteDefinition.ID]? {
+    static func place(_ wheel: [EmoteKey], emote: EmoteKey, at index: Int) -> [EmoteKey]? {
         guard wheel.indices.contains(index), wheel[index] != emote else { return nil }
         var next = wheel
         if let from = next.firstIndex(of: emote) { next[from] = wheel[index] }
@@ -100,7 +100,7 @@ enum EmoteWheelEditor {
         return EmoteWheelEditor.normalize(next)
     }
 
-    static func swap(_ wheel: [EmoteDefinition.ID], _ a: Int, _ b: Int) -> [EmoteDefinition.ID]? {
+    static func swap(_ wheel: [EmoteKey], _ a: Int, _ b: Int) -> [EmoteKey]? {
         guard a != b, a >= 0, b >= 0, a < wheel.count, b < wheel.count else { return nil }
         var next = wheel
         next.swapAt(a, b)
@@ -109,24 +109,38 @@ enum EmoteWheelEditor {
 
     static let slotCount = 8
 
-    static func isValid(_ wheel: [EmoteDefinition.ID]) -> Bool {
-        wheel.count == Self.slotCount
-            && Set(wheel).count == wheel.count
-            && wheel.allSatisfy { EmoteDefinition.allByID[$0] != nil }
+    static func isValid(_ wheel: [EmoteKey]) -> Bool {
+        wheel.count == Self.slotCount && Set(wheel).count == wheel.count
     }
 
-    static func normalize(_ wheel: [EmoteDefinition.ID]?) -> [EmoteDefinition.ID] {
+    static func normalize(_ wheel: [EmoteKey]?) -> [EmoteKey] {
         let defaults = EmoteDefinition.defaultWheel
         guard let wheel, !wheel.isEmpty else { return defaults }
-        var out: [EmoteDefinition.ID] = []
-        for id in wheel where EmoteDefinition.allByID[id] != nil && !out.contains(id) {
-            out.append(id)
+        var out: [EmoteKey] = []
+        for key in wheel where !out.contains(key) {
+            out.append(key)
             if out.count == Self.slotCount { break }
         }
         if out.isEmpty { return defaults }
-        for id in defaults where out.count < Self.slotCount {
-            if !out.contains(id) { out.append(id) }
+        for key in defaults where out.count < Self.slotCount {
+            if !out.contains(key) { out.append(key) }
         }
         return out.count == Self.slotCount ? out : defaults
+    }
+
+    /// Takes one emote off the wheel everywhere it sits, refilling the hole with a shipped emote
+    /// that is not already on the wheel — a deleted import must not leave a dead slice.
+    static func evict(_ wheel: [EmoteKey], _ key: EmoteKey) -> [EmoteKey] {
+        guard wheel.contains(key) else { return wheel }
+        var next = wheel
+        for index in next.indices where next[index] == key {
+            next[index] = firstVacantSlot(on: next)
+        }
+        return normalize(next)
+    }
+
+    private static func firstVacantSlot(on wheel: [EmoteKey]) -> EmoteKey {
+        let candidates = EmoteDefinition.defaultWheel + EmoteDefinition.all.map(\.key)
+        return candidates.first { !wheel.contains($0) } ?? EmoteDefinition.defaultWheel[0]
     }
 }

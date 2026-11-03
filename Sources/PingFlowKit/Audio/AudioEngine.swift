@@ -142,13 +142,14 @@ final class AudioEngine: ObservableObject {
     }
 
     @discardableResult
-    func playEmote(_ definition: EmoteDefinition, level: Double = 1) -> Bool {
+    func playEmote(_ asset: EmoteAsset, level: Double = 1) -> Bool {
         guard level > 0, masterVolume > 0 else { return false }
         guard startIfNeeded(), let format = graphFormat else { return false }
-        guard let source = AssetCatalog.shared.emoteBuffer(named: definition.soundName) else { return false }
-        guard let buffer = ready(soundName: "emote:\(definition.soundName)", from: source, in: format) else { return false }
+        guard let source = EmoteLibrary.shared.buffer(for: asset) else { return false }
+        let cacheKey = asset.key.kind == .shipped ? "emote:\(asset.key.token)" : "import:\(asset.key.token)"
+        guard let buffer = ready(soundName: cacheKey, from: source, in: format) else { return false }
         guard let index = busy.firstIndex(of: false) else {
-            Log.audio.debug("All \(Self.voicePoolSize) voices busy; skipped emote \(definition.soundName, privacy: .public)")
+            Log.audio.debug("All \(Self.voicePoolSize) voices busy; skipped emote \(asset.name, privacy: .public)")
             return false
         }
         let node = nodes[index]
@@ -158,6 +159,11 @@ final class AudioEngine: ObservableObject {
             Task { @MainActor [weak self] in self?.settle(index) }
         }
         return true
+    }
+
+    /// True when an emote has a sound that decodes, so the library can mark the ones that are silent.
+    func canPlayEmote(_ asset: EmoteAsset) -> Bool {
+        asset.soundURL != nil && EmoteLibrary.shared.buffer(for: asset) != nil
     }
 
     /// The wheel's tick, mixed lower than a ping, exactly as the reference does it.

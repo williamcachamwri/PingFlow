@@ -64,6 +64,8 @@ enum EmoteCategory: String, Codable, CaseIterable, Identifiable, Hashable, Senda
     case poro
     case reactions
     case gestures
+    /// Whatever the user imported. Listed last, because it is the only group that starts empty.
+    case custom
 
     var id: String { rawValue }
 
@@ -73,6 +75,7 @@ enum EmoteCategory: String, Codable, CaseIterable, Identifiable, Hashable, Senda
         case .poro: return "Poro"
         case .reactions: return "Reactions"
         case .gestures: return "Gestures"
+        case .custom: return "Mine"
         }
     }
 }
@@ -126,12 +129,6 @@ extension EmoteDefinition {
     ]
 
     static let allByID: [ID: EmoteDefinition] = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
-
-    /// Default 8-slot wheel, matching the reference layout.
-    static let defaultWheel: [ID] = [
-        .unworthy_cn, .poro_snax, .sad_kitten, .cheeky_poro,
-        .angry_kitty, .gg_heart, .bee_happy, .bee_mad,
-    ]
 
     static func definition(for id: ID) -> EmoteDefinition {
         allByID[id] ?? all[0]

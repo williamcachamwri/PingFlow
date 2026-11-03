@@ -113,8 +113,8 @@ struct AppSettings: Codable, Equatable {
     // Emote wheel
     var emoteEnabled = true
     var emoteTrigger: ActivationModifier = .control
-    var emoteWheelSlots: [EmoteDefinition.ID] = EmoteDefinition.defaultWheel
-    var emoteClick: EmoteDefinition.ID = .cheeky_poro
+    var emoteWheelSlots: [EmoteKey] = EmoteDefinition.defaultWheel
+    var emoteClick: EmoteKey = .shipped(.cheeky_poro)
     var emoteSoundsEnabled = true
 
     // Appearance
@@ -187,7 +187,7 @@ struct AppSettings: Codable, Equatable {
         emoteEnabled = value(.emoteEnabled, true)
         emoteTrigger = value(.emoteTrigger, .control)
         emoteWheelSlots = value(.emoteWheelSlots, EmoteDefinition.defaultWheel)
-        emoteClick = value(.emoteClick, .cheeky_poro)
+        emoteClick = value(.emoteClick, .shipped(.cheeky_poro))
         emoteSoundsEnabled = value(.emoteSoundsEnabled, true)
         appearanceMode = value(.appearanceMode, .system)
         accentColor = value(.accentColor, .blue)
@@ -292,11 +292,19 @@ final class SettingsStore: ObservableObject {
 }
 
 enum AppPaths {
+    /// `PINGFLOW_SUPPORT_DIR` puts the whole writable area somewhere else, which is how the tests
+    /// and the render harness stay off the user's real library and settings.
     static var supportDirectory: URL {
+        if let override = ProcessInfo.processInfo.environment["PINGFLOW_SUPPORT_DIR"], !override.isEmpty {
+            return URL(fileURLWithPath: override)
+        }
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSTemporaryDirectory())
         return base.appendingPathComponent("PingFlow", isDirectory: true)
     }
 
     static var logsDirectory: URL { supportDirectory.appendingPathComponent("Logs", isDirectory: true) }
+
+    /// Imports live here, one folder per emote, so deleting one cannot touch another's files.
+    static var emoteLibraryDirectory: URL { supportDirectory.appendingPathComponent("Emotes", isDirectory: true) }
 }

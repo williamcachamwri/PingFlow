@@ -2,18 +2,27 @@ import AppKit
 import QuartzCore
 import SwiftUI
 
-/// Draws emotes on screen: a circular-clipped image with a pop-in animation, living for 3 seconds.
-/// Simpler than pings — no rings, no ground glow, just the emote itself.
+/// Draws emotes on screen: a circular-clipped image with a pop-in animation, living for a few
+/// seconds. A shipped png stays a plain CALayer; a gif or a clip needs a decoder, so it gets one
+/// view instead — and only the fired emote ever runs it.
 final class EmoteFxContainerView: NSView {
     private struct Handle {
         let root: CALayer
         let itemID: EmoteStage.Item.ID
+        /// Non-nil only for animated art, which cannot be drawn by a layer alone.
+        let view: EmoteArtNSView?
     }
+
+    /// Concurrent decoders on screen. A flood of clips falls back to their posters instead of
+    /// asking every core in the machine to decode video at once.
+    static let maximumAnimatedViews = 3
 
     private var handles: [Handle] = []
     private var canvasHeight: CGFloat = 0
 
     override var isFlipped: Bool { false }
+
+    var animatedViewCount: Int { handles.filter { $0.view != nil }.count }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -36,6 +45,8 @@ final class EmoteFxContainerView: NSView {
             guard !live.contains(handle.itemID) else { return false }
             handle.root.sublayers?.forEach { Self.strip($0) }
             handle.root.removeFromSuperlayer()
+            handle.view?.stop()
+            handle.view?.removeFromSuperview()
             return true
         }
         let present = Set(handles.map(\.itemID))
@@ -45,7 +56,11 @@ final class EmoteFxContainerView: NSView {
     }
 
     func removeAll() {
-        handles.forEach { $0.root.removeFromSuperlayer() }
+        for handle in handles {
+            handle.root.removeFromSuperlayer()
+            handle.view?.stop()
+            handle.view?.removeFromSuperview()
+        }
         handles.removeAll()
     }
 
@@ -64,14 +79,25 @@ final class EmoteFxContainerView: NSView {
         layer?.addSublayer(root)
 
         let local = CGPoint(x: size, y: size)
-        build(into: root, local: local, item: item)
-        handles.append(Handle(root: root, itemID: item.id))
+        var view: EmoteArtNSView?
+        if item.asset.isAnimated, animatedViewCount < Self.maximumAnimatedViews {
+            let art = EmoteArtNSView(frame: CGRect(x: anchor.x - size / 2,
+                                                   y: anchor.y - size / 2,
+                                                   width: size,
+                                                   height: size))
+            art.corner = size / 2
+            art.show(asset: item.asset, animates: true)
+            addSubview(art)
+            view = art
+            animate(layer: art.layer, local: local, item: item, translated: true)
+        } else {
+            build(into: root, local: local, item: item)
+        }
+        handles.append(Handle(root: root, itemID: item.id, view: view))
     }
 
     private func build(into root: CALayer, local: CGPoint, item: EmoteStage.Item) {
         let s = item.size
-        let now = CACurrentMediaTime()
-        let duration = EmoteStage.displayDuration
 
         // The emote art: circular-clipped image with a pop-in animation.
         let art = CALayer()
@@ -81,7 +107,7 @@ final class EmoteFxContainerView: NSView {
         art.masksToBounds = true
         art.opacity = 0
 
-        if let image = AssetCatalog.shared.emoteImage(named: item.definition.textureName),
+        if let image = EmoteLibrary.shared.poster(for: item.asset),
            let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) {
             art.contents = cgImage
             art.contentsGravity = .resizeAspect
@@ -89,29 +115,41 @@ final class EmoteFxContainerView: NSView {
             art.backgroundColor = NSColor(hex: "#4a4e54").cgColor
         }
 
-        // Pop in: scale 0.3 → 1.1 → 1.0 over 280ms, then hold, then fade out.
-        art.add(Self.keyframe(path: "transform.scale",
-                              values: [0.3, 1.1, 1.0, 1.0, 0.8],
-                              at: [0, 0.15, 0.25, 0.85, 1],
-                              duration: duration, begin: now), forKey: "pop")
-        art.add(Self.keyframe(path: "opacity",
-                              values: [0, 1, 1, 1, 0],
-                              at: [0, 0.1, 0.85, 0.9, 1],
-                              duration: duration, begin: now), forKey: "fade")
         root.addSublayer(art)
+        animate(layer: art, local: local, item: item, translated: false)
+    }
 
-        // A gentle bob after the pop.
-        let bob = CAKeyframeAnimation(keyPath: "position")
-        bob.values = [local,
-                      CGPoint(x: local.x, y: local.y + 4),
-                      CGPoint(x: local.x, y: local.y - 4),
-                      local]
+    /// The pop, the hold, the fade and the bob. A view's own layer gets the bob as a translation,
+    /// because AppKit owns that layer's position and would undo it on the next layout.
+    private func animate(layer: CALayer?, local: CGPoint, item: EmoteStage.Item, translated: Bool) {
+        guard let layer else { return }
+        let now = CACurrentMediaTime()
+        let duration = item.lifetime
+
+        layer.add(Self.keyframe(path: "transform.scale",
+                                values: [0.3, 1.1, 1.0, 1.0, 0.8],
+                                at: [0, 0.15, 0.25, 0.85, 1],
+                                duration: duration, begin: now), forKey: "pop")
+        layer.add(Self.keyframe(path: "opacity",
+                                values: [0, 1, 1, 1, 0],
+                                at: [0, 0.1, 0.85, 0.9, 1],
+                                duration: duration, begin: now), forKey: "fade")
+
+        let bob = CAKeyframeAnimation(keyPath: translated ? "transform.translation.y" : "position")
+        if translated {
+            bob.values = [0, 4, -4, 0]
+        } else {
+            bob.values = [local,
+                          CGPoint(x: local.x, y: local.y + 4),
+                          CGPoint(x: local.x, y: local.y - 4),
+                          local]
+        }
         bob.keyTimes = [0, 0.33, 0.66, 1]
         bob.duration = 1.4
         bob.beginTime = now + 0.3
         bob.repeatCount = .greatestFiniteMagnitude
         bob.calculationMode = .cubic
-        art.add(bob, forKey: "bob")
+        layer.add(bob, forKey: "bob")
     }
 
     // MARK: - Animation factories

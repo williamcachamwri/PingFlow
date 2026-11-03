@@ -434,7 +434,7 @@ private struct HeaderStats: View {
                 ValuePlate(isLeagueWheel ? "League" : "Custom", tone: isLeagueWheel ? .neutral : .warning)
             case .pane(.emoteWheel):
                 ValuePlate("\(store.settings.emoteWheelSlots.count)/8", tone: .accent)
-                ValuePlate("\(EmoteDefinition.all.count) emotes")
+                ValuePlate("\(engine.library.entries.count) emotes")
             case .pane(.sounds):
                 ValuePlate(store.settings.isMuted ? "Muted" : "\(Int((store.settings.volume * 100).rounded())) %",
                            tone: store.settings.isMuted ? .warning : .neutral)

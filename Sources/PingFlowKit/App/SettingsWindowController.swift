@@ -47,6 +47,8 @@ final class SettingsWindowController: NSWindowController, NSWindowDelegate {
                 .environmentObject(engine.permissions)
                 .environmentObject(engine.audio)
                 .environmentObject(engine.loginItems)
+                .environmentObject(engine.library)
+                .environmentObject(engine.emoteImports)
             let view = AnyView(root.preferredColorScheme(engine.store.settings.appearanceMode.colorScheme))
             let hosting = NSHostingView(rootView: view)
             hosting.frame = window?.contentView?.bounds ?? .zero
